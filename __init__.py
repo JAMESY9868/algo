@@ -6,3 +6,4 @@
 
 from . import shared;
 from . import sort;
+from . import funcs;
