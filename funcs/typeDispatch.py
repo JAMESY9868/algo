@@ -3,8 +3,9 @@
     Dispatch the function using the type of certain arguments
 '''
 
-from . import typing, fts;
-from . import Decorator, Function;
+from .shared import typing, fts;
+
+from .shared import Decorator, Function;
 
 def positionalDispatch(position: int) -> Decorator:
     'See functools singledispatch; dispatch using argument at `position` index'
