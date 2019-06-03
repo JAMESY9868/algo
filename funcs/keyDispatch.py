@@ -62,8 +62,23 @@ class _entryType:
 
     def match(self: '_entryType', keys: _keyType) -> bool:
         'Determine if this entry and the collection of keys is a match'
+        # if empty, should be false
+        if not keys:
+            return False;
         some: Function = all if self.isAnd else any;
         return some(key in self.keys for key in keys);
+
+    def toDict(self: '_entryType') -> dict:
+        'Turn the object into a dict'
+        return dict(
+            priority=self.priority,
+            isAnd=self.isAnd,
+            keys=self.keys,
+            func=self.func,
+        );
+
+    def __repr__(self: '_entryType') -> str:
+        return f'entry{self.toDict()}';
 
 class keywordPriorityDispatch:
     __slots__: typing.Tuple[str, ...] = (
@@ -165,6 +180,7 @@ class keywordPriorityDispatch:
         return self.__wrapped__;
 
     def __call__(self: 'keywordPriorityDispatch', *args, **kwargs) -> typing.Any:
+        # print((self, args, kwargs));
         return self._dispatch(*kwargs.keys())(*args, **kwargs);
 
     def clearCache(self) -> None:
