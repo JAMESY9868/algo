@@ -1,6 +1,6 @@
 #!/usr/bin/env -S python3 -i
 '''
-    Provides some higher-order functions or useful utilities
+    Provide some higher-order functions or useful utilities
 '''
 
 import typing;
