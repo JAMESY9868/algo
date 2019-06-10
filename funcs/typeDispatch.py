@@ -1,9 +1,10 @@
 #!/usr/bin/env -S python3 #-i
+# pylint: disable=invalid-name
 '''
     Dispatch the function using the type of certain arguments
 '''
-
-from .shared import typing, fts;
+import typing;
+import functools as fts;
 
 from .shared import Decorator, Function;
 
