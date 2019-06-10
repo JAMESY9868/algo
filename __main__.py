@@ -9,14 +9,7 @@ from . import *;
 
 # print(globals());
 
-kpd = funcs.kd.keywordPriorityDispatch;
+def main() -> None:
+    pass
 
-@kpd
-def keymain(*args, **kwargs):
-    'main'
-    print(f'main: {(args, kwargs)}');
-
-@keymain.register(('width', 'height'))
-def widthHeight(*_, width, height, **__):
-    'width height'
-    print(f'widthHeight: {(_, width, height, __)}');
+main();

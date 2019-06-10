@@ -3,7 +3,9 @@
     This package supplies with some algorithms to be reused in
     other projects.
 '''
-
 from . import shared;
-from . import sort;
+
+from . import data;
 from . import funcs;
+from . import iters;
+from . import sort;
