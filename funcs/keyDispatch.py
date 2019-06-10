@@ -86,6 +86,22 @@ class _entryType:
         return f'entry{self.toDict()}';
 
 class keywordPriorityDispatch:
+    # XXX: linked register raises TypeError
+    # scenario:
+    # @kpd
+    # def func(**__): pass
+    # @func.register('a')
+    # @func.register('b', inner=True)
+    # def func(a, b, **__): pass
+    #
+    # func(b)
+    # -- raises TypeError missing kw-only argument
+    # Expected behavior:
+    # -- ignores this combination
+    #
+    # maybe check object identity
+    # if ==, catch for typeerror?
+    # then how about NOT kw-only but wildcard?
     __slots__: _slots = (
         '_registry',
         '__wrapped__', '__doc__',
