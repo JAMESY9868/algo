@@ -1,21 +1,25 @@
 #!/usr/bin/env -S python3 #-i
+# pylint: disable=invalid-name
 '''
     Dispatch the function by determining whether certain keys are supplied
 '''
 # builtin modules
-from .shared import typing, c, fts;
+import typing;
+import collections as c;
+import functools as fts;
 
 # external package
 from ..sort import insert;
 
 # current package
 from .shared import Decorator, Function;
+from ..shared import _slots;
 
-_keyType = typing.Tuple[str, ...];
+_keyType = _slots;
 
 class _entryType:
     'The type for an entry for `keywordPriorityDispatch` registry'
-    __slots__: typing.Tuple[str, ...] = (
+    __slots__: _slots = (
         '_pr', #'priority',
         '_ia', #'isAnd',
         '_k', #'keys',
@@ -66,7 +70,8 @@ class _entryType:
         if not keys:
             return False;
         some: Function = all if self.isAnd else any;
-        return some(key in self.keys for key in keys);
+        # all registered keys are supplied
+        return some(key in keys for key in self.keys);
 
     def toDict(self: '_entryType') -> dict:
         'Turn the object into a dict'
@@ -81,7 +86,7 @@ class _entryType:
         return f'entry{self.toDict()}';
 
 class keywordPriorityDispatch:
-    __slots__: typing.Tuple[str, ...] = (
+    __slots__: _slots = (
         '_registry',
         '__wrapped__', '__doc__',
         '__name__', '__qualname__', #'__module__',
@@ -91,7 +96,7 @@ class keywordPriorityDispatch:
             self: 'keywordPriorityDispatch',
             func: Function) -> Function:
         '''
-            Dispatches the function by the inclusion of keywords in the function call
+            Dispatch the function by the inclusion of keywords in the function call
 
             Rules:
                 - The default function is used last when others do not match;
@@ -104,6 +109,9 @@ class keywordPriorityDispatch:
                   and have no effects on single-keyword registrations
                 - If multiple registrations have the same priority and overlapping
                   keys, the dispatch might not work as intended
+            How to decorate:
+                - @keywordPriorityDispatch
+                  def yourFunc(...): pass
             How to register:
                 - @func.register(keys[, priority=X, mode='and']), where keys is
                   either a sequence of strings, or an arbitrary number of strings;
@@ -120,13 +128,19 @@ class keywordPriorityDispatch:
             self: 'keywordPriorityDispatch',
             *keys: typing.Union[typing.Sequence[str], str],
             priority: typing.Optional[int] = None,
-            mode: str = 'and', **__) -> Decorator:
+            mode: str = 'and', inner: bool = False, **__) -> Decorator:
         '''
             Return a function that register the supplied function
 
             How to use:
-                @mainFunc.register(('key1', 'key2',), [priority=0,] [mode='and'])
+                @mainFunc.register('key1', 'key2', [...,] [priority=0,] [mode='and'])
                 def yourFunc(....): pass
+            Note:
+                - The registered function can have same name because
+                  the register decorator returns the original KPD object
+                - If inner is true, then the decorator *does* return the
+                  original function; this helps the situation where complicated
+                  decoration is needed such as (A and B) or (C and D)
         '''
         # sanity check input for keys
         # if provided nothing, error
@@ -139,7 +153,11 @@ class keywordPriorityDispatch:
         if not all(isinstance(elem, str) for elem in keys):
             raise TypeError('Bad type. Not all input are of str type. ');
         # proceed: assuming all elements of keys are strings
-        def _decorator(func: callable) -> callable:
+        def _decorator(func: Function) -> Function:
+            '''
+                Return the original object instead of function to avoid
+                namespace pollution
+            '''
             # no need for wrapper since everything recorded to main function
             # just record the func to registry and finish
             # add to registry
@@ -161,21 +179,40 @@ class keywordPriorityDispatch:
                 # reverse (largest in the front)
                 reverse=True,
                 # use priority as key
-                key=_entryType.priority,
+                key=lambda e: e.priority,
             );
-            return func;
+            # only return wrapped function if inner is true
+            return func if inner else self;
         # clear dispatch cache because priorities will be different
         self.clearCache();
         return _decorator;
 
     @fts.lru_cache()
-    def _dispatch(self: 'keywordPriorityDispatch', *keys: str) -> callable:
+    def _dispatch(self: 'keywordPriorityDispatch', *keys: str) -> Function:
         'Dispatch the correct function using the keys and registry'
+        # if the function raises NotImplementedError or returns NotImplemented
+        # use default function with same arguments
+        # todo: maybe use the next matching function?
+        def wrapper(
+                func: Function,
+                *args: typing.Any, **kwargs: typing.Any) -> typing.Any:
+            try:
+                ret: typing.Any = func(*args, **kwargs);
+                if ret is NotImplemented:
+                    raise NotImplementedError;
+                return ret;
+            except NotImplementedError:
+                return self.__wrapped__(*args, **kwargs);
+
+        def regWrap(reg: _entryType) -> Function:
+            return fts.wraps(reg.func)(fts.partial(wrapper, reg.func));
+
         for reg in self._registry:
             # if satisfies condition
             assert isinstance(reg, _entryType);
             if reg.match(keys):
-                return reg.func;
+                # return reg.func;
+                return regWrap(reg);
         # otherwise default function
         return self.__wrapped__;
 
