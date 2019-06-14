@@ -10,36 +10,52 @@ import itertools as its;
 import functools as fts;
 
 from ..funcs import kd;
-from ..shared import funcChain, _slots;
+from ..shared import funcChain, _slots, objName;
 
 Or = typing.Union;
 
 _Vertex: type = int;
-class Vertex(int):
-    'A trivial vertex class'
+class Vertex: #(int):
+    'A vertex class'
     __slots__: _slots = (
+        # vertex value (used to be super,
+        # but subtype of int does not support nonempty slots)
+        '_int',
+        # flag for some traversal algorithms;
+        # default to true if not supplied
+        '_flag',
     );
 
-    def __new__(cls, value: int, *_, **__) -> 'Vertex':
-        return super(cls, cls).__new__(cls, value);
+    def __init__(
+            self: 'Vertex',
+            value: int = 0,
+            *, flag: bool = True, **__) -> None:
+        ''
+        self._int: int = value;
+        self._flag: bool = flag;
+
+    def __int__(self: 'Vertex') -> int:
+        'Integer representation of this object'
+        return self._int;
 
     def __repr__(self: 'Vertex') -> str:
         return (
             f'{self.__class__.__qualname__}'
-            f'({super().__repr__()})'
+            f'({self._int!r})'
         );
         # return f'{self.__class__.__qualname__}({self._ind})';
 
-    # def __str__(self: 'Vertex') -> str:
-    #     return super().__str__();
-    #     # return f'{self._ind}';
+    def __str__(self: 'Vertex') -> str:
+        return f'{self._int}';
 
     @classmethod
     def map(
             cls: type,
-            iters: typing.Iterable[_Vertex]) -> typing.Iterable['Vertex']:
+            iters: typing.Iterable[_Vertex],
+            *, flag: bool = True,) -> typing.Iterable['Vertex']:
         'Convert an iterable of _Vertex (raw type) to Vertex'
-        return map(Vertex, iters);
+        return map(lambda v: Vertex(v, flag=flag), iters);
+
 _V = Or[Vertex, _Vertex];
 
 _Edge = typing.Tuple[int, int];
@@ -115,7 +131,6 @@ class Edge:
             *_, fromVert=fromTo[0], toVert=fromTo[1],
             **__);
 
-
     def toTuple(self: 'Edge') -> typing.Tuple[Vertex, Vertex]:
         'Return the tuple form of edge disregarding bidir flag'
         return (self._from, self._to);
@@ -157,7 +172,8 @@ class Edge:
             Convert an iterable of _Edge (raw type) to Edge;
             optionally supply bidir flag (default=True)
         '''
-        return map(fts.partial(Edge, bidir=bidir), iters);
+        return map(lambda fromTo: Edge(fromTo=fromTo, bidir=bidir), iters);
+        # return map(fts.partial(Edge, bidir=bidir), iters);
 
 class Graph:
     '''
@@ -165,6 +181,8 @@ class Graph:
 
         Use integers to represent unique vertices;
         use tuple of integers to represent unique edge pairs
+
+        See `__init__` for details on arguments
     '''
     __slots__: _slots = (
         # basic components
@@ -176,7 +194,7 @@ class Graph:
         '''
             Initialize the graph based on provided arguments
 
-            Rules:
+            Keyword Arguments:
                 - `verts` as Iterable[Vertex] and
                   `edges` as Iterable[Edge], with
                   optionally `bidir` (bidirectional) as bool
@@ -184,17 +202,28 @@ class Graph:
                 - `numVerts` as int, and
                   `edges` as Iterable[Vertex] or
                   `edgeMode` = 'all' or 'none' (default)
+
+            Positional Arguments:
+                - `verts: Iterable[Vertex] = args[0]`
+                  `edges: Iterable[Edge] = args[1]`
+                  `bidir: bool = args[2] or True`
         '''
         self.__construct(self, *args, **kwargs);
 
     @kd.keywordPriorityDispatch
-    def __construct(self: 'Graph', *_, **__) -> None:
+    def __construct(self: 'Graph', *args, **__) -> None:
         'Default constructor for Graph'
         # uses registered function hopefully without RecursionError
         # self._verts: typing.Set[Vertex] = set();
         # self._edges: typing.Set[Edge] = set();
         # self._bidir: bool = True;
-        return self.__construct(self, verts={}, edges={},);
+        if len(args) < 2:
+            return self.__construct(self, verts={}, edges={},);
+        return self.__construct(
+            self,
+            verts=args[0], edges=args[1],
+            bidir=True if len(args) <= 2 else args[2]
+        );
     @__construct.register('verts', 'edges',)
     def __construct(
             self, *_,
@@ -206,8 +235,8 @@ class Graph:
             Constructor with given vertices and edges;
             optionally specify whether the graph is bidirectional
         '''
-        self._verts: typing.Set[Vertex] = {*verts};#{*Vertex.map(verts)};
-        self._edges: typing.Set[Edge] = {*edges};#{*Edge.map(edges)};
+        self._verts: typing.Set[Vertex] = {*Vertex.map(verts)};
+        self._edges: typing.Set[Edge] = {*Edge.map(edges, bidir=bidir)};
         self._bidir: bool = bidir;
     # (numVerts) and (edges or edgeMode)
     @__construct.register('numVerts',)
@@ -253,30 +282,128 @@ class Graph:
             **__,
         );
 
+    def __repr__(self: 'Graph') -> str:
+        'Formal representation of the graph object'
+        return (
+            # Graph({}, {}, bidir=True)
+            f'{objName(type(self))}('
+            # vertices
+            f'verts={self._verts!r}, '
+            # edges
+            f'edges={self._edges!r}, '
+            # bidir
+            f'bidir={self._bidir!r}'
+            ')'
+        );
+
+    def __str__(self: 'Graph') -> str:
+        'Informal representation of the graph object'
+        return (
+            # Graph({}, {}, bidir=True)
+            f'{objName(type(self))}('
+            # vertices
+            f'verts={{{", ".join(str(v) for v in self._verts)}}}, '
+            # edges
+            f'edges={{{", ".join(str(e) for e in self._edges)}}}, '
+            # bidir
+            f'bidir={self._bidir}'
+            ')'
+        );
+
+    def iterFromVert(self: 'Graph', fromVert: Vertex) -> typing.Iterable[Vertex]:
+        'A generator for all vertices B such that edge(A->B) exists'
+        return (
+            edge._to for edge in self._edges
+            if (
+                fromVert in edge.toTuple()
+                if self._bidir
+                else fromVert == edge._from
+            )
+        );
+
+    def iterToVert(self: 'Graph', toVert: Vertex) -> typing.Iterable[Vertex]:
+        'A generator for all vertices A such that edge(A->B) exists'
+        return (
+            edge._from for edge in self._edges
+            if (
+                toVert in edge.toTuple()
+                if self._bidir
+                else toVert == edge._to
+            )
+        );
+
+    def dfs(
+            self: 'Graph',
+            fromVert: Vertex, toVert: Vertex,
+            exclude: typing.Set[Vertex] = set()) -> typing.Sequence[Vertex]:
+        '''
+            Perform DFS (depth first) on graph and return the
+            first found path
+        '''
+        fromVert = Vertex(fromVert);
+        toVert = Vertex(toVert);
+
+        if fromVert == toVert:
+            # return value includes from and to
+            return (fromVert,);
+
+        for nextVert in self.iterFromVert(fromVert):
+            # iterate over each neighbor
+            _dfs: typing.Sequence[Vertex] = self.dfs(
+                nextVert, toVert, exclude.union({fromVert,})
+            );
+            if _dfs:
+                return (fromVert,) + _dfs;
+        return ();
+
+    def bfs(
+            self: 'Graph',
+            fromVert: Vertex, toVert: Vertex,
+            exclude: typing.Set[Vertex] = set()) -> typing.Sequence[Vertex]:
+        'Perform BFS (breadth first) on graph and return the first found path'
+        fromVert = Vertex(fromVert);
+        toVert = Vertex(toVert);
+
+        if fromVert == toVert:
+            # return value includes from and to
+            return (fromVert,);
+
+        raise NotImplementedError;
 
 
-def _debugVertex() -> None:
-    v1 = Vertex(1);
-    v2 = Vertex(2);
-    print(f'v1={v1}, v2={v2}');
-
-def _debugEdge() -> None:
-    e1 = Edge(0, 1, False);
-    e2 = Edge(1, 0, False);
-    e3 = Edge(1, 0, False);
-    print(f'e1={e1}, e2={e2}, e3={e3}');
-    print(f'e1==e2?: {e1==e2}');
-    print(f'e2==e3?: {e2==e3}');
-    print(f'e1!=e3?: {e1!=e3}');
-
-# pylint: disable=global-variable-undefined
-def _debugGraph() -> None:
-    global g1;
-    g1 = Graph(verts=range(2), edges=((0, 1),));
 
 def debug() -> None:
-    _debugVertex();
-    _debugEdge();
+    # pylint: disable=all
+    def _debugVertex() -> None:
+        v1 = Vertex(1);
+        v2 = Vertex(2);
+        print(f'v1={v1}, v2={v2}');
+
+    def _debugEdge() -> None:
+        e1 = Edge(0, 1, False);
+        e2 = Edge(1, 0, False);
+        e3 = Edge(1, 0, False);
+        print(f'e1={e1}, e2={e2}, e3={e3}');
+        print(f'e1==e2?: {e1==e2}');
+        print(f'e2==e3?: {e2==e3}');
+        print(f'e1!=e3?: {e1!=e3}');
+
+    def _debugGraph() -> None:
+        global g1;
+        g1 = Graph(
+            range(3),
+            ((0,1),(0,2)),
+            False
+        );
+
+    # _debugVertex();
+    # _debugEdge();
     _debugGraph();
 
 debug();
+
+__all__: _slots = (
+    'Vertex',
+    'Edge',
+    'Graph',
+);
