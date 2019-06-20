@@ -12,6 +12,7 @@ import functools as fts;
 
 _slots = typing.Tuple[str, ...];
 
+# region obj
 def objName(
         obj: object,
         avoidQual: bool = False,
@@ -47,7 +48,9 @@ def objFullName(
         '' if (not modu and not name) else
         (modu + ('.' if modu else '') + name)
     ) or default;
+# endregion
 
+#region identity
 def identity(val: T, *args: T, **__: any) -> T:
     '''
         Return the input argument(s).
@@ -63,7 +66,9 @@ def identity(val: T, *args: T, **__: any) -> T:
     if args:
         return (val, *args);
     return val;
+# endregion
 
+# region funcs
 _singleArgFunc = typing.Callable[[typing.Any], typing.Any];
 def funcAppend(
         funcOuter: _singleArgFunc,
@@ -83,6 +88,7 @@ def funcChain(funcs: typing.Iterable[_singleArgFunc]) -> _singleArgFunc:
         For example, funcChain(f, g, h)(x, ...) is equivalent to f(g(h(x, ...)))
     '''
     return fts.reduce(funcAppend, funcs, identity);
+# endregion
 
 __all__: _slots = (
     'objName',
